@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>퀴즈쇼</title>
+  <!-- Teachable Machine 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <style>
+    * {
+        margin: 0;
+        padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Malgun Gothic', sans-serif;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 메인 화면 - 버튼 선택 */
+    #mainScreen {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+      background: #f0f0f0;
+    }
+
+    .difficulty-button {
+      width: 300px;
+      height: 80px;
+      font-size: 24px;
+      font-weight: bold;
+      border: 3px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: #fff;
+      color: #333;
+    }
+
+    .difficulty-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    /* 퀴즈 화면 */
+    .quiz-screen {
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .quiz-screen.active {
+      display: flex;
+    }
+
+    /* 난이도 하 - gray 배경 */
+    #easyScreen {
+      background: gray;
+    }
+
+    /* 난이도 중 - 기본 배경 */
+    #mediumScreen {
+      background: #e0e0e0;
+    }
+
+    /* 난이도 상 - 기본 배경 */
+    #hardScreen {
+      background: #d0d0d0;
+    }
+
+    .welcome-message {
+      font-size: 36px;
+      font-weight: bold;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 50px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    #mediumScreen .welcome-message,
+    #hardScreen .welcome-message {
+      color: #333;
+      text-shadow: none;
+    }
+
+    .question-container {
+      width: 80%;
+      max-width: 800px;
+      padding: 40px;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      display: none;
+      position: relative;
+    } 
+
+    .question-container.active {
+      display: block;
+    }
+
+    .question-number {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .question-text {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+
+    .answer-input {
+      width: 100%;
+      padding: 15px;
+      font-size: 20px;
+      border: 2px solid #333;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    .options-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    /* 난이도 하 - 일반 컨테이너 설정 */
+    #easyScreen .question-container {
+      position: relative;
+      width: 100%;
+      padding: 20px;
+    }
+
+    #easyScreen .options-container {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .option-button {
+      width: 100%;
+      padding: 20px;
+      font-size: 20px;
+      background: #fff;
+      color: #333;
+      border: 3px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: left;
+    }
+
+    /* 난이도 하 - 일반 레이아웃 */
+    #easyScreen .option-button {
+      position: relative;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+
+    .option-button:hover {
+      background: #f0f0f0;
+      transform: translateX(5px);
+    }
+
+    /* 난이도 하에서는 호버 시 일반 효과 */
+    #easyScreen .option-button:hover {
+      background: #f0f0f0;
+      transform: translateX(5px);
+    }
+
+    .option-button.selected {
+      background: #333;
+      color: #fff;
+    }
+
+    .submit-button {
+      width: 100%;
+      padding: 15px;
+      font-size: 20px;
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    /* 난이도 하: 질문 및 제출 버튼 고정 위치 */
+    #easyScreen .question-number {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    #easyScreen .question-text {
+      position: fixed;
+      top: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      max-width: 80%;
+      text-align: center;
+    }
+
+    #easyScreen .submit-button {
+      position: fixed;
+      bottom: 280px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      z-index: 1000; /* 웹캠보다 낮지만 답지 박스보다 높음 */
+      margin-top: 20px;
+    }
+
+    #easyScreen #resultMessage {
+      position: fixed;
+      bottom: 350px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      min-width: 300px;
+    }
+
+    .submit-button:hover {
+      background: #555;
+    }
+
+    .submit-button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .back-button {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 2px solid #333;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .result-message {
+      font-size: 24px;
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .result-message.correct {
+      background: #4caf50;
+      color: #fff;
+      position: relative;
+    }
+
+    .result-message.incorrect {
+      background: #f44336;
+      color: #fff;
+      position: relative;
+    }
+
+    /* 정답/오답 아이콘 애니메이션 */
+    .result-icon {
+      display: inline-block;
+      font-size: 48px;
+      margin: 0 10px;
+    }
+
+    .checkmark-icon {
+      animation: rotateIn 0.6s ease-out;
+    }
+
+    .x-icon {
+      animation: fadeInScale 0.5s ease-out;
+    }
+
+    @keyframes rotateIn {
+      0% {
+        transform: rotate(-180deg) scale(0);
+        opacity: 0;
+      }
+      50% {
+        transform: rotate(10deg) scale(1.2);
+      }
+      100% {
+        transform: rotate(0deg) scale(1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeInScale {
+      0% {
+        transform: scale(0);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.3);
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* 결과 메시지 바운스 인 애니메이션 */
+    .result-message {
+      animation: bounceIn 0.6s ease-out;
+    }
+
+    @keyframes bounceIn {
+      0% {
+        transform: scale(0.3) translateY(-100px);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.05) translateY(10px);
+      }
+      70% {
+        transform: scale(0.9) translateY(-5px);
+      }
+      100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+    }
+
+    /* 화면 흔들림 애니메이션 (오답 시) */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+      20%, 40%, 60%, 80% { transform: translateX(10px); }
+    }
+
+    .quiz-screen.shake {
+      animation: shake 0.5s ease-in-out;
+    }
+
+    /* 배경 깜빡임 효과 */
+    @keyframes flash {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 0.6; }
+    }
+
+    .quiz-screen.flash-correct::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(76, 175, 80, 0.4);
+      pointer-events: none;
+      z-index: 1;
+      animation: flash 0.3s ease-in-out;
+    }
+
+    .quiz-screen.flash-incorrect::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+        width: 100%;
+        height: 100%;
+      background: rgba(244, 67, 54, 0.4);
+      pointer-events: none;
+      z-index: 1;
+      animation: flash 0.3s ease-in-out;
+    }
+
+    /* 별 효과 */
+  /*  .star {
+      position: fixed;
+      color: #ffd700;
+      font-size: 30px;
+      pointer-events: none;
+      z-index: 1000;
+      animation: starFall 1s ease-out forwards;
+    } */
+
+     @keyframes starFall {
+      0% {
+        transform: translateY(0) rotate(0deg) scale(0);
+        opacity: 1;
+      }
+      50% {
+        transform: translateY(-50px) rotate(180deg) scale(1.5);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-100px) rotate(360deg) scale(0);
+        opacity: 0;
+      }
+    }
+
+    /* 폭죽 효과 */
+    .confetti {
+      position: fixed;
+      width: 5px;
+      height: 5px;
+      pointer-events: none;
+      z-index: 1000;
+      animation: confettiFall 4s ease-out forwards;
+    }
+
+    .confetti:nth-child(2n) { background: #00ff00; }
+    .confetti:nth-child(3n) { background: #0000ff; }
+    .confetti:nth-child(4n) { background: #ffff00; }
+    .confetti:nth-child(5n) { background: #ff00ff; }
+
+    @keyframes confettiFall {
+      0% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(500px, 800px) translateX(300px) rotate(720deg);
+        opacity: 0;
+      }
+    }
+
+
+    /* 웹캠 및 Teachable Machine 관련 스타일 */
+    .camera-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 320px;
+      height: 240px;
+      border: 3px solid #333;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      z-index: 10000;
+      pointer-events: auto;
+    }
+
+    #webcam {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* 거울 모드 */
+    }
+
+    .prediction-info {
+      position: fixed;
+      bottom: 270px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 16px;
+      z-index: 10001;
+      min-width: 200px;
+      pointer-events: none;
+    }
+
+    .prediction-item {
+      margin: 5px 0;
+      padding: 5px;
+    }
+
+    .prediction-item.highest {
+      background: rgba(0, 200, 0, 0.3);
+      font-weight: bold;
+    }
+
+    </style>
+  </head>
+  <body>
+  <!-- 메인 화면 -->
+  <div id="mainScreen">
+
+    <button class="difficulty-button" onclick="startQuiz('easy')">난이도 하</button>
+    <button class="difficulty-button" onclick="startQuiz('medium')">난이도 중</button>
+    <button class="difficulty-button" onclick="startQuiz('hard')">난이도 상</button>
+  </div>
+
+  <!-- 난이도 하 화면 -->
+  <div id="easyScreen" class="quiz-screen">
+    <button class="back-button" onclick="goBack()">← 뒤로가기</button>
+    <div class="welcome-message">서울시립대에 관한 초성 퀴즈입니다.</div>
+    <div id="easyQuestions" class="question-container"></div>
+  </div>
+
+  <!-- 난이도 중 화면 -->
+  <div id="mediumScreen" class="quiz-screen">
+    <button class="back-button" onclick="goBack()">← 뒤로가기</button>
+    <div class="welcome-message">서울시립대에 관한 넌센스 퀴즈입니다.</div>
+    <div id="mediumQuestions" class="question-container"></div>
+  </div>
+
+  <!-- 난이도 상 화면 -->
+  <div id="hardScreen" class="quiz-screen">
+    <button class="back-button" onclick="goBack()">← 뒤로가기</button>
+    <div class="welcome-message">'이시네'에 대한 개인적인 퀴즈입니다</div>
+    <div id="hardQuestions" class="question-container"></div>
+  </div>
+
+  <!-- 웹캠 및 예측 정보 -->
+  <div class="camera-container" id="cameraContainer" style="display: none;">
+    <video id="webcam" autoplay playsinline></video>
+  </div>
+  <div class="prediction-info" id="predictionInfo" style="display: none;">
+    <div>포즈 인식 결과:</div>
+    <div id="predictions"></div>
+  </div>
+
+
+  <script>
+    // Teachable Machine 관련 변수
+    let model = null;
+    let webcam = null;
+    let isPredicting = false;
+    let lastPrediction = null;
+    let predictionCount = 0;
+    const PREDICTION_THRESHOLD = 0.5; // 예측 신뢰도 임계값
+    const PREDICTION_COUNT_THRESHOLD = 5; // 연속 예측 횟수
+
+    // Teachable Machine 모델 로드 (Pose 모델)
+    async function initTeachableMachine() {
+      // 📌 모델 폴더 이름을 여기에 입력하세요
+      const folderName = "pose model";
+      // URL 인코딩 적용 (공백 처리)
+      const modelURL = `./${encodeURIComponent(folderName)}/model.json`;
+      const metadataURL = `./${encodeURIComponent(folderName)}/metadata.json`;
+      
+      try {
+        if (typeof tmPose === 'undefined') {
+          throw new Error("tmPose가 로드되지 않았습니다.");
+        }
+        console.log("📁 모델 로드 시도 중...");
+        console.log("   모델 URL:", modelURL);
+        console.log("   메타데이터 URL:", metadataURL);
+        
+        model = await tmPose.load(modelURL, metadataURL);
+        console.log("✅ Teachable Machine Pose 모델 로드 완료");
+        console.log("   모델 클래스 수:", model.getTotalClasses());
+        console.log("   클래스 목록:", model.getClassLabels());
+        console.log("   모델 타입:", typeof model);
+        
+        await initWebcam();
+      } catch (error) {
+        console.error("모델 로드 실패:", error);
+        console.log("💡 모델 파일 경로를 확인해주세요.");
+        console.log("   폴더 이름:", folderName);
+        console.log("   모델 경로:", modelURL);
+        model = null;
+      }
+    }
+
+    // 웹캠 초기화
+    async function initWebcam() {
+      const video = document.getElementById('webcam');
+      const container = document.getElementById('cameraContainer');
+      
+      if (!video || !container) {
+        console.error("웹캠 요소를 찾을 수 없습니다.");
+        return;
+      }
+      
+      if (video.srcObject) {
+        const tracks = video.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+      }
+      
+      isPredicting = false;
+      webcam = null;
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 },
+            facingMode: 'user'
+          } 
+        });
+        
+        video.srcObject = stream;
+        
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("비디오 로드 타임아웃"));
+          }, 5000);
+          
+          video.onloadedmetadata = () => {
+            clearTimeout(timeout);
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            webcam = { video: video, canvas: canvas };
+            
+            container.style.display = 'block';
+            const predictionInfo = document.getElementById('predictionInfo');
+            if (predictionInfo) {
+              predictionInfo.style.display = 'block';
+            }
+            
+            resolve();
+          };
+          
+          if (video.readyState >= 2) {
+            clearTimeout(timeout);
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            webcam = { video: video, canvas: canvas };
+            container.style.display = 'block';
+            const predictionInfo = document.getElementById('predictionInfo');
+            if (predictionInfo) {
+              predictionInfo.style.display = 'block';
+            }
+            resolve();
+          }
+        });
+        
+        if (model) {
+          console.log("🎬 예측 시작");
+          isPredicting = true;
+          predict();
+        } else {
+          console.warn("⚠️ 모델이 로드되지 않아 예측을 시작할 수 없습니다.");
+        }
+      } catch (error) {
+        console.error("웹캠 접근 실패:", error);
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+          alert("웹캠 접근 권한이 필요합니다.");
+        } else if (error.name === 'NotFoundError') {
+          alert("웹캠을 찾을 수 없습니다.");
+        } else {
+          alert("웹캠 초기화 중 오류가 발생했습니다: " + error.message);
+        }
+      }
+    }
+
+    // 예측 루프
+    async function predict() {
+      if (!model || !webcam || !isPredicting) {
+        if (!model) console.warn("⚠️ 모델이 로드되지 않았습니다.");
+        if (!webcam) console.warn("⚠️ 웹캠이 초기화되지 않았습니다.");
+        if (!isPredicting) console.warn("⚠️ 예측이 중지되었습니다.");
+        return;
+      }
+
+      const ctx = webcam.canvas.getContext('2d');
+      ctx.drawImage(webcam.video, 0, 0, webcam.canvas.width, webcam.canvas.height);
+      
+      try {
+        if (!webcam.video || webcam.video.readyState < 2) {
+          requestAnimationFrame(() => predict());
+          return;
+        }
+        
+        // 포즈 추정
+        const pose = await model.estimatePose(webcam.video);
+        
+        // 포즈가 없어도 예측 시도 (Teachable Machine Pose는 포즈가 없어도 분류 가능)
+        // 하지만 키포인트가 있으면 더 정확함
+        if (pose && pose.keypoints) {
+          const keypoints = pose.keypoints.filter(kp => kp.score > 0.3);
+          if (keypoints.length > 0 && Math.random() < 0.01) {
+            console.log(`✅ 키포인트 감지: ${keypoints.length}개`);
+          }
+        }
+        
+        // 포즈 객체로 예측 (포즈가 null이어도 가능)
+        const prediction = await model.predict(pose);
+        
+        if (prediction && prediction.length > 0) {
+          // 디버깅: 예측 결과 확인 (가끔만 출력)
+          if (Math.random() < 0.05) {
+            const maxPred = prediction.reduce((max, p) => p.probability > max.probability ? p : max, prediction[0]);
+            console.log(`📊 예측: ${maxPred.className} (${(maxPred.probability * 100).toFixed(1)}%)`);
+          }
+          
+          updatePredictionDisplay(prediction);
+          handlePosePrediction(prediction);
+        } else {
+          if (Math.random() < 0.01) {
+            console.warn("⚠️ 예측 결과가 비어있습니다.");
+          }
+          const predictionsDiv = document.getElementById('predictions');
+          if (predictionsDiv) {
+            predictionsDiv.innerHTML = '<div style="color: #ff6b6b;">예측 결과를 받지 못했습니다.</div>';
+          }
+        }
+      } catch (error) {
+        console.error("❌ 예측 오류:", error);
+        console.error("에러 상세:", error.message);
+        if (error.stack) {
+          console.error("스택:", error.stack);
+        }
+      }
+      
+      requestAnimationFrame(() => predict());
+    }
+
+    // 예측 결과 표시
+    function updatePredictionDisplay(prediction) {
+      const predictionsDiv = document.getElementById('predictions');
+      if (!predictionsDiv) return;
+
+      let html = '';
+      let highestClass = '';
+      let highestProb = 0;
+
+      prediction.forEach((pred) => {
+        const prob = (pred.probability * 100).toFixed(1);
+        if (pred.probability > highestProb) {
+          highestProb = pred.probability;
+          highestClass = pred.className;
+        }
+        html += `<div class="prediction-item ${pred.probability === highestProb ? 'highest' : ''}">
+          ${pred.className}: ${prob}%
+        </div>`;
+      });
+
+      predictionsDiv.innerHTML = html;
+      lastPrediction = { class: highestClass, prob: highestProb };
+    }
+
+    // 포즈 인식 결과로 답변 선택
+    function handlePosePrediction(prediction) {
+      if (!prediction || prediction.length === 0) return;
+
+      let highestClass = '';
+      let highestProb = 0;
+      
+      prediction.forEach(pred => {
+        if (pred.probability > highestProb) {
+          highestProb = pred.probability;
+          highestClass = pred.className;
+        }
+      });
+
+      // 디버깅: 예측 결과 출력 (가끔만)
+      if (Math.random() < 0.1) {
+        console.log(`🎯 최고 예측: ${highestClass} (${(highestProb * 100).toFixed(1)}%), 임계값: ${(PREDICTION_THRESHOLD * 100).toFixed(1)}%, 연속: ${predictionCount}/${PREDICTION_COUNT_THRESHOLD}`);
+      }
+
+      if (highestProb >= PREDICTION_THRESHOLD) {
+        if (lastPrediction && lastPrediction.class === highestClass) {
+          predictionCount++;
+          
+          if (predictionCount >= PREDICTION_COUNT_THRESHOLD) {
+            console.log(`✅ 답 선택 실행: ${highestClass} (${(highestProb * 100).toFixed(1)}%)`);
+            selectAnswerByPose(highestClass);
+            predictionCount = 0;
+          }
+        } else {
+          predictionCount = 1;
+        }
+      } else {
+        predictionCount = 0;
+      }
+      
+      // lastPrediction 업데이트
+      lastPrediction = { class: highestClass, prob: highestProb };
+    }
+
+    // 포즈로 답변 선택
+    function selectAnswerByPose(poseClass) {
+      const optionNumber = parseInt(poseClass.replace(/[^0-9]/g, ''));
+      
+      if (optionNumber >= 1 && optionNumber <= 4) {
+        const optionIndex = optionNumber - 1;
+        selectOption(optionIndex);
+        console.log(`포즈로 ${optionNumber}번 선택됨: ${poseClass}`);
+      }
+    }
+
+    // 질문 데이터 - 여기에 질문을 추가하세요!
+    // 객관식 형식: { question: "질문", answer: "정답", options: ["선택지1", "선택지2", "선택지3", "선택지4"] }
+    const quizData = {
+      easy: [
+        { 
+          question: "ㅅㅇㅅㄹㄷㅎㄱ", 
+          answer: "1번: 서울시립대학교",
+          options: ["1번: 서울시립대학교", "2번: 서울사랑대학교", "3번: 서울시러대학교", "4번: 시립사랑대학교"]
+        },
+        { 
+          question: "ㅇㅅㅊㅇㄷ", 
+          answer: "2번: 예술체육대",
+          options: ["1번: 예술치의대 ", "2번: 예술체육대", "3번: 예술초상대", "4번: 요양체육대"]
+        },
+        { 
+          question: "ㅇㅇㅇㅇㅅㄹㅎ", 
+          answer: "2번: 에이아이사랑해",
+          options: ["1번: 에이아이시로해", "2번: 에이아이사랑해", "3번: 에이아이소랑해", "4번: 에이아이소라해"]
+        },
+        { 
+          question: "ㅎㄴㅁ", 
+          answer: "4번: 하늘못",
+          options: ["1번: 하늘맛", "2번: 하늘뭐", "3번: 하나만", "4번: 하늘못"]
+        },
+        { 
+          question: "ㄷㄷㅁㄱ", 
+          answer: "3번: 동대문구",
+          options: ["1번: 동대문동", "2번: 동대문시", "3번: 동대문구", "4번: 동대문면"]
+        },
+        { 
+          question: "ㅇㅅㅊㅇㄷㅎ", 
+          answer: "2번: 예술체육대학",
+          options: ["1번: 예술체육대학원", "2번: 예술체육대학", "3번: 예술체육대학교", "4번: 예술체육대학부"]
+        },
+        { 
+          question: "UOS", 
+          answer: "1번: U, UOR STAR",
+          options: ["1번: U, UOR STAR", "2번: U, UOR SEOUL", "3번: U, UOR START", "4번: U, UOR SOUND"]
+        },
+        { 
+          question: "ㅁ", 
+          answer: "1번: 매",
+          options: ["1번: 매", "2번: 독수리", "3번: 비둘기", "4번: 참새"]
+        },
+        { 
+          question: "ㅇㅎㅈ", 
+          answer: "3번: 인향제",
+          options: ["1번: 은하지", "2번: 은하제", "3번: 인향제", "4번: 안향제"]
+        },
+        { 
+          question: "ㄷㅅㅎㄱㅅㅇㄷ", 
+          answer: "2번: 도시와함께성장하는대학",
+          options: ["1번: 도시와함께발전하는대학", "2번: 도시와함께성장하는대학", "3번: 도시와함께성장하는학교", "4번: 도시와함께성장하는기관"]
+        },
+        { 
+          question: "ㅍㄹㅅ", 
+          answer: "4번: 파란색",
+          options: ["1번: 빨간색", "2번: 초록색", "3번: 노란색", "4번: 파란색"]
+        },
+      ],
+      medium: [
+       
+        { 
+          question: "서울시립대학교의 공식 약칭은?", 
+          answer: "1번: UOS",
+          options: ["1번: UOS", "2번: SNU", "3번: YU", "4번: KU"]
+        },
+        { 
+          question: "서울시립대 학생을 뭐라고 부를까요?", 
+          answer: "4번: 시대생",
+          options: ["1번: 시대의별", "2번: 시대물", "3번: 시대사", "4번: 시대생"]
+        },
+        { 
+          question: "서울시립대학교의 구는?", 
+          answer: "3번: 서울특별시 동대문구",
+          options: ["1번: 서울특별시 강남구", "2번: 서울특별시 서초구", "3번: 서울특별시 동대문구", "4번: 서울특별시 마포구"]
+        },
+        { 
+          question: "서울시립대의 유일한 댄스 동아리 이름은?", 
+          answer: "3번: RAH",
+          options: ["1번: UDG", "2번: UOD", "3번: RAH", "4번: URH"]
+        },
+        { 
+          question: "건공이는 누구일까?", 
+          answer: "1번: 건공관에 사는 고양이",
+          options: ["1번: 건공관에 사는 고양이", "2번: 건공관에 사는 고슴도치", "3번: 건공관에 자주 보이는 공", "4번: 건축공학관을 뜻함"]
+        },
+        { 
+          question: "이루매는 귀엽나요?", 
+          answer: "3번: 네니요",
+          options: ["1번: 네", "2번: 아니요", "3번: 네니요", "4번: 아니예"]
+        },
+        { 
+          question: "서울시립대학교의 대표 색상은?", 
+          answer: "3번: 파란색",
+          options: ["1번: 빨간색", "2번: 초록색", "3번: 파란색", "4번: 노란색"]
+        },
+        { 
+          question: "이루매는 항상 웃고 있을까요?", 
+          answer: "3번: 아마도??",
+          options: ["1번: 흠,,", "2번: 글쎄요,,", "3번: 아마도??", "4번: 네니요!"]
+        },
+        { 
+          question: "건공이는 무슨 색?", 
+          answer: "1번: 주황색",
+          options: ["1번: 주황색", "2번: 검은색", "3번: 빨간색", "4번: 흰색"]
+        },
+        { 
+          question: "서울시립대에 없는 동아리는?", 
+          answer: "3번: 스케이트 동아리",
+          options: ["1번: 스쿠버 다이빙 동아리", "2번: 자전거 동아리", "3번: 스케이트 동아리", "4번: 야생조류 연구 동아리"]
+        },
+      ],
+      hard: [
+      { 
+          question: "이시네의 키는 몇 cm일까요?", 
+          answer: "3번: 168cm",
+          options: ["1번: 166cm", "2번: 167cm", "3번: 168cm", "4번: 170cm"]
+        },
+        { 
+          question: "이시네의 제일 좋아하는 스무디는?", 
+          answer: "1번: 망고 스무디",
+          options: ["1번: 망고 스무디", "2번: 요거트 스무디", "3번: 키위 스무디", "4번: 딸기 스무디"]
+        },
+        { 
+          question: "이시네의 좋아하는 컬러는?", 
+          answer: "4번: 보라",
+          options: ["1번: 검정", "2번: 핑크", "3번: 블루", "4번: 보라"]
+        },
+        { 
+          question: "이시네의 좋아할 것 같은 취미는?", 
+          answer: "1번: 자전거 타기",
+          options: ["1번: 자전거 타기", "2번: 독서 하기", "3번: 영화관 가기", "4번: 게임 하기"]
+        },
+        { 
+          question: "이시네의 오늘 몇시간 잤을까요?", 
+          answer: "4번: ",
+          options: ["1번: 6시간", "2번: 9시간", "3번: 4시간", "4번: 2시간"]
+        },
+      ]
+    };
+
+    let currentDifficulty = null;
+    let currentQuestionIndex = 0;
+    let currentQuestions = [];
+
+    // 퀴즈 시작
+    function startQuiz(difficulty) {
+      currentDifficulty = difficulty;
+      currentQuestionIndex = 0;
+      currentQuestions = quizData[difficulty];
+
+      // 메인 화면 숨기기
+      document.getElementById('mainScreen').style.display = 'none';
+
+      // 해당 난이도 화면 표시
+      const screenId = difficulty + 'Screen';
+      document.getElementById(screenId).classList.add('active');
+
+      // Teachable Machine 초기화
+      if (!model) {
+        initTeachableMachine();
+      } else {
+        initWebcam();
+      }
+
+      // 질문 표시
+      showQuestion();
+    }
+
+    // 질문 표시
+    function showQuestion() {
+      if (currentQuestionIndex >= currentQuestions.length) {
+        // 모든 질문 완료
+        showCompletion();
+        return;
+      }
+
+      const question = currentQuestions[currentQuestionIndex];
+      const containerId = currentDifficulty + 'Questions';
+      const container = document.getElementById(containerId);
+
+      // 객관식 선택지 생성
+      let optionsHTML = '';
+      if (question.options && question.options.length > 0) {
+        optionsHTML = '<div class="options-container">';
+        question.options.forEach((option, index) => {
+          optionsHTML += `
+            <button class="option-button" id="option${index}" style="cursor: default; pointer-events: none;">
+              ${option}
+            </button>
+          `;
+        });
+        optionsHTML += '</div>';
+      }
+
+      container.innerHTML = `
+        <div class="question-number">질문 ${currentQuestionIndex + 1} / ${currentQuestions.length}</div>
+        <div class="question-text">${question.question}</div>
+        ${optionsHTML}
+        <button class="submit-button" id="submitBtn" onclick="checkAnswer()" disabled>답변 제출</button>
+        <div id="resultMessage"></div>
+      `;
+
+      container.classList.add('active');
+
+      // 난이도 상: 답지 박스들을 랜덤 위치에 배치하고 움직이게 함
+      if (currentDifficulty === 'hard') {
+        setTimeout(() => {
+          initRandomButtonMovement(container);
+        }, 100);
+      }
+    }
+
+    // 난이도 상: 랜덤 움직임 초기화 (웹캠 영역 피하기)
+    let movingButtons = [];
+    let animationFrameId = null;
+
+    function initRandomButtonMovement(container) {
+      // 기존 애니메이션 정지
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      movingButtons = [];
+
+      const buttons = container.querySelectorAll('.option-button');
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const buttonWidth = 300;
+      const buttonHeight = 80;
+      
+      // 웹캠 영역 (우측 하단) 제외
+      const webcamArea = {
+        right: screenWidth - 20, // 우측 여백
+        bottom: 20, // 하단 여백
+        width: 320, // 웹캠 너비
+        height: 240 + 50 // 웹캠 높이 + 예측 정보 영역
+      };
+
+      buttons.forEach((btn, index) => {
+        let centerX, centerY;
+        let attempts = 0;
+        
+        // 웹캠 영역을 피하는 랜덤 위치 생성
+        do {
+          centerX = Math.random() * (screenWidth - buttonWidth);
+          centerY = 100 + Math.random() * (screenHeight - 300);
+          attempts++;
+        } while (
+          attempts < 50 && // 최대 50번 시도
+          centerX + buttonWidth > webcamArea.right - webcamArea.width &&
+          centerY + buttonHeight > screenHeight - webcamArea.height
+        );
+        
+        btn.style.left = centerX + 'px';
+        btn.style.top = centerY + 'px';
+        
+        // 랜덤 속도와 방향 (각 버튼마다 다른 속도)
+        const speedX = (Math.random() - 0.5) * 2; // -1 ~ 1
+        const speedY = (Math.random() - 0.5) * 2; // -1 ~ 1
+        const rotationSpeed = (Math.random() - 0.5) * 2; // 회전 속도
+        
+        // 각 버튼의 상태 저장
+        movingButtons.push({
+          element: btn,
+          x: centerX,
+          y: centerY,
+          speedX: speedX,
+          speedY: speedY,
+          rotation: 0,
+          rotationSpeed: rotationSpeed,
+          width: buttonWidth,
+          height: buttonHeight
+        });
+      });
+
+      // 애니메이션 시작
+      animateRandomButtonMovement();
+    }
+
+    // 랜덤 움직임 애니메이션 (웹캠 영역 피하기)
+    function animateRandomButtonMovement() {
+      if (movingButtons.length === 0) return;
+
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const webcamArea = {
+        right: screenWidth - 20,
+        bottom: 20,
+        width: 320,
+        height: 240 + 50
+      };
+
+      movingButtons.forEach(button => {
+        // 위치 업데이트
+        button.x += button.speedX;
+        button.y += button.speedY;
+        button.rotation += button.rotationSpeed;
+
+        // 화면 경계에서 튕기기
+        if (button.x <= 0 || button.x >= screenWidth - button.width) {
+          button.speedX *= -1;
+          button.x = Math.max(0, Math.min(screenWidth - button.width, button.x));
+        }
+        if (button.y <= 100 || button.y >= screenHeight - button.height - 100) {
+          button.speedY *= -1;
+          button.y = Math.max(100, Math.min(screenHeight - button.height - 100, button.y));
+        }
+
+        // 웹캠 영역과 충돌 방지
+        const buttonRight = button.x + button.width;
+        const buttonBottom = button.y + button.height;
+        const webcamLeft = webcamArea.right - webcamArea.width;
+        const webcamTop = screenHeight - webcamArea.height;
+
+        if (buttonRight > webcamLeft && button.x < webcamArea.right && 
+            buttonBottom > webcamTop && button.y < screenHeight - webcamArea.bottom) {
+          // 웹캠 영역에 들어가면 반대 방향으로 튕기기
+          if (button.x < webcamLeft) {
+            button.speedX = -Math.abs(button.speedX);
+          } else {
+            button.speedX = Math.abs(button.speedX);
+          }
+          if (button.y < webcamTop) {
+            button.speedY = -Math.abs(button.speedY);
+          } else {
+            button.speedY = Math.abs(button.speedY);
+          }
+        }
+
+        // 위치와 회전 적용
+        button.element.style.left = button.x + 'px';
+        button.element.style.top = button.y + 'px';
+        button.element.style.transform = `rotate(${button.rotation}deg)`;
+      });
+
+      // 다음 프레임 요청
+      animationFrameId = requestAnimationFrame(animateRandomButtonMovement);
+    }
+
+    // 선택지 선택
+    let selectedOptionIndex = -1;
+    function selectOption(index) {
+      // 이전 선택 해제
+      document.querySelectorAll('.option-button').forEach(btn => {
+        btn.classList.remove('selected');
+      });
+      
+      // 현재 선택 표시
+      const selectedBtn = document.getElementById('option' + index);
+      selectedBtn.classList.add('selected');
+      selectedOptionIndex = index;
+      
+      // 제출 버튼 활성화
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    // 별 효과 생성
+    function createStars(x, y, count = 15) {
+      for (let i = 0; i < count; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.textContent = '⭐';
+        star.style.left = (x + (Math.random() - 0.5) * 200) + 'px';
+        star.style.top = (y + (Math.random() - 0.5) * 200) + 'px';
+        star.style.animationDelay = (Math.random() * 0.3) + 's';
+        document.body.appendChild(star);
+        
+        setTimeout(() => star.remove(), 1000);
+      }
+    }
+
+    // 폭죽 효과 생성
+    function createConfetti(x, y, count = 30) {
+      for (let i = 0; i < count; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = (x + (Math.random() - 0.5) * 300) + 'px';
+        confetti.style.top = (y + (Math.random() - 0.5) * 300) + 'px';
+        confetti.style.animationDelay = (Math.random() * 0.5) + 's';
+        confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+        document.body.appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 1500);
+      }
+    }
+
+    // 배경 깜빡임 효과
+    function flashBackground(isCorrect) {
+      const screenId = currentDifficulty + 'Screen';
+      const screen = document.getElementById(screenId);
+      
+      if (isCorrect) {
+        screen.classList.add('flash-correct');
+      } else {
+        screen.classList.add('flash-incorrect');
+      }
+      
+      setTimeout(() => {
+        screen.classList.remove('flash-correct', 'flash-incorrect');
+      }, 300);
+    }
+
+    // 화면 흔들림 효과
+    function shakeScreen() {
+      const screenId = currentDifficulty + 'Screen';
+      const screen = document.getElementById(screenId);
+      screen.classList.add('shake');
+      
+      setTimeout(() => {
+        screen.classList.remove('shake');
+      }, 500);
+    }
+
+    // 답변 확인
+    function checkAnswer() {
+      if (selectedOptionIndex === -1) {
+        alert('답을 선택해주세요.');
+        return;
+      }
+
+      const question = currentQuestions[currentQuestionIndex];
+      const userAnswer = question.options[selectedOptionIndex];
+      const correctAnswer = question.answer;
+      const resultDiv = document.getElementById('resultMessage');
+
+      // 제출 버튼 비활성화
+      document.getElementById('submitBtn').disabled = true;
+
+      // 결과 메시지 위치 계산 (화면 중앙)
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const centerX = screenWidth / 2;
+      const centerY = screenHeight / 2;
+
+      if (userAnswer === correctAnswer) {
+        // 정답 처리
+        resultDiv.innerHTML = '<div class="result-message correct"><span class="result-icon checkmark-icon">✓</span>정답입니다!</div>';
+        
+        // 배경 깜빡임 (초록색)
+        flashBackground(true);
+        
+        // 별 효과
+        createStars(centerX, centerY, 20);
+        
+        // 폭죽 효과
+        createConfetti(centerX, centerY, 40);
+        
+        setTimeout(() => {
+          selectedOptionIndex = -1;
+          currentQuestionIndex++;
+          showQuestion();
+        }, 2000);
+      } else {
+        // 오답 처리
+        resultDiv.innerHTML = `<div class="result-message incorrect"><span class="result-icon x-icon">✗</span>틀렸습니다. 정답: ${correctAnswer}</div>`;
+        
+        // 배경 깜빡임 (빨간색)
+        flashBackground(false);
+        
+        // 화면 흔들림
+        shakeScreen();
+        
+        setTimeout(() => {
+          selectedOptionIndex = -1;
+          currentQuestionIndex++;
+          showQuestion();
+        }, 2500);
+      }
+    }
+
+    // 완료 화면
+    function showCompletion() {
+      const containerId = currentDifficulty + 'Questions';
+      const container = document.getElementById(containerId);
+
+      container.innerHTML = `
+        <div class="question-text" style="text-align: center;">
+          모든 질문을 완료했습니다!<br>
+          수고하셨습니다!
+        </div>
+        <button class="submit-button" onclick="goBack()">메인으로 돌아가기</button>
+      `;
+    }
+
+    // 뒤로가기
+    function goBack() {
+      // 모든 퀴즈 화면 숨기기
+      document.querySelectorAll('.quiz-screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+
+      // 메인 화면 표시
+      document.getElementById('mainScreen').style.display = 'flex';
+
+      // 웹캠 숨기기 및 예측 중지
+      isPredicting = false;
+      document.getElementById('cameraContainer').style.display = 'none';
+      document.getElementById('predictionInfo').style.display = 'none';
+      
+      // 웹캠 스트림 정리
+      const video = document.getElementById('webcam');
+      if (video && video.srcObject) {
+        const tracks = video.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+      }
+      webcam = null;
+
+      // 난이도 하 랜덤 움직임 애니메이션 정지
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      movingButtons = [];
+
+      // 상태 초기화
+      currentDifficulty = null;
+      currentQuestionIndex = 0;
+      currentQuestions = [];
+      selectedOptionIndex = -1;
+      predictionCount = 0;
+      lastPrediction = null;
+    }
+
+    // 질문 추가 함수 (콘솔에서 사용 가능)
+    // 객관식 형식: addQuestion('easy', '질문', '정답', ['선택지1', '선택지2', '선택지3', '선택지4'])
+    function addQuestion(difficulty, question, answer, options) {
+      if (!quizData[difficulty]) {
+        console.error('잘못된 난이도입니다.');
+        return;
+      }
+      if (!options || options.length === 0) {
+        console.error('선택지(options)를 제공해주세요.');
+        return;
+      }
+      quizData[difficulty].push({ question, answer, options });
+      console.log(`${difficulty} 난이도에 질문이 추가되었습니다.`);
+    }
+  </script>
+  </body>
+</html>
